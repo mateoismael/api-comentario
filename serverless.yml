@@ -4,39 +4,48 @@ service: api-comentario
 provider:
   name: aws
   runtime: python3.12
-  # Default memory size for functions (default: 1024MB)
   memorySize: 1024
   timeout: 30
+
+  # Rol preexistente
   iam:
     role: arn:aws:iam::111097882274:role/LabRole
+
+  # Variables de entorno
   environment:
+    # (Opcional, si sigues usando DynamoDB en otros handlers)
     TABLE_NAME: ${sls:stage}-t_comentarios
+    # Para Ingesta Push a S3
+    BUCKET_NAME: ${self:service}-ingestion-${self:provider.stage}
 
 functions:
   crear:
     handler: comentario.lambda_handler
     events:
       - http:
-          path: /comentario/crear
+          path: comentario
           method: post
-          cors: true
-          integration: lambda
 
 resources:
   Resources:
-    TablaComentarios:
-      Type: AWS::DynamoDB::Table
+    # 1) Bucket S3 de ingesta (uno distinto por stage)
+    IngestionBucket:
+      Type: AWS::S3::Bucket
       Properties:
-        TableName: ${self:provider.environment.TABLE_NAME}
-        AttributeDefinitions:
-          - AttributeName: tenant_id
-            AttributeType: S
-          - AttributeName: uuid
-            AttributeType: S
-        KeySchema:
-          - AttributeName: tenant_id
-            KeyType: HASH
-          - AttributeName: uuid
-            KeyType: RANGE
-        # Set the capacity to auto-scale
-        BillingMode: PAY_PER_REQUEST
+        BucketName: ${self:service}-ingestion-${self:provider.stage}
+
+    # 2) Política inline para LabRole que permite hacer PutObject en ese bucket
+    LabRoleS3PutPolicy:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyName: AllowS3PutIngestion
+        Roles:
+          - LabRole
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource:
+                - arn:aws:s3:::${self:service}-ingestion-${self:provider.stage}/*

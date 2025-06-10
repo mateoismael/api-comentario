@@ -4,18 +4,20 @@ service: api-comentario
 provider:
   name: aws
   runtime: python3.12
-  stage: ${opt:stage, 'dev'}               # Valor por defecto si omites --stage
+  stage: ${opt:stage, 'dev'}                     # valor por defecto si no pasas --stage
   memorySize: 1024
-  timeout: 30
+  timeout: 29                                    # API Gateway máximo 29 s
   iam:
-    role: arn:aws:iam::111097882274:role/LabRole  # tu rol preexistente
+    role: arn:aws:iam::111097882274:role/LabRole # tu rol preexistente
+
   environment:
-    TABLE_NAME: ${self:provider.stage}-t_comentarios  # antes usabas ${sls:stage}
+    TABLE_NAME: ${self:provider.stage}-t_comentarios
     BUCKET_NAME: ${self:service}-ingestion-${self:provider.stage}
 
 functions:
   crear:
     handler: comentario.lambda_handler
+    timeout: 29
     events:
       - http:
           path: comentario
@@ -23,30 +25,14 @@ functions:
 
 resources:
   Resources:
-    # Tu tabla DynamoDB original
-    ComentariosTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:provider.environment.TABLE_NAME}
-        AttributeDefinitions:
-          - AttributeName: tenant_id
-            AttributeType: S
-          - AttributeName: uuid
-            AttributeType: S
-        KeySchema:
-          - AttributeName: tenant_id
-            KeyType: HASH
-          - AttributeName: uuid
-            KeyType: RANGE
-        BillingMode: PAY_PER_REQUEST
-
-    # Nuevo bucket S3 de Ingesta (push) por stage
+    # Bucket S3 de ingesta (uno por stage)
     IngestionBucket:
       Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
       Properties:
         BucketName: ${self:service}-ingestion-${self:provider.stage}
 
-    # Inline policy para que LabRole pueda hacer put_object
+    # Inline policy para que LabRole pueda subir objetos a ese bucket
     LabRoleS3PutPolicy:
       Type: AWS::IAM::Policy
       Properties:
@@ -54,7 +40,7 @@ resources:
         Roles:
           - LabRole
         PolicyDocument:
-          Version: "2012-10-17"
+          Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action:

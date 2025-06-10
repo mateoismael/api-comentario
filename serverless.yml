@@ -4,43 +4,42 @@ service: api-comentario
 provider:
   name: aws
   runtime: python3.12
-  stage: ${opt:stage, 'dev'}         # default si no pasas --stage
   memorySize: 1024
-  timeout: 29                        # <=29s para API Gateway
+  timeout: 30
+  # Si quieres que Serverless gestione el rol e incluya permisos a DynamoDB y S3,
+  # reemplaza provider.iam.role por iamRoleStatements:
+  # iam.role: arn:aws:iam::111097882274:role/LabRole
+  environment:
+    TABLE_NAME: ${sls:stage}-t_comentarios
+    BUCKET_NAME: ingest-${sls:stage}
 
-  # Serverless creará un IAM Role automáticamente 
-  # y a ese le añadirá estas declaraciones de permiso:
   iamRoleStatements:
+    # Permite put en tu tabla DynamoDB
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+      Resource:
+        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TABLE_NAME}
+    # Permite subir objetos al bucket S3 creado abajo
     - Effect: Allow
       Action:
         - s3:PutObject
       Resource:
-        - arn:aws:s3:::${self:service}-ingestion-${self:provider.stage}/*
-
-  environment:
-    TABLE_NAME: ${self:provider.stage}-t_comentarios
-    BUCKET_NAME: ${self:service}-ingestion-${self:provider.stage}
+        - arn:aws:s3:::${self:provider.environment.BUCKET_NAME}/*
 
 functions:
   crear:
     handler: comentario.lambda_handler
-    timeout: 29
     events:
       - http:
-          path: comentario
+          path: /comentario/crear
           method: post
+          cors: true
+          integration: lambda
 
 resources:
   Resources:
-    # Bucket S3 de ingesta, uno por stage
-    IngestionBucket:
-      Type: AWS::S3::Bucket
-      DeletionPolicy: Retain
-      Properties:
-        BucketName: ${self:service}-ingestion-${self:provider.stage}
-
-    # (Si sigues usando DynamoDB en otros handlers)
-    ComentariosTable:
+    TablaComentarios:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:provider.environment.TABLE_NAME}
@@ -55,3 +54,9 @@ resources:
           - AttributeName: uuid
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
+
+    BucketIngesta:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.BUCKET_NAME}
+        # Opcional: versionado, lifecycle, políticas, etc.

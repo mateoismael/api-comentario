@@ -1,22 +1,18 @@
-org: mateoismael
 service: api-comentario
 
 provider:
   name: aws
   runtime: python3.12
+  stage: ${opt:stage, 'dev'}                    # <— Aquí defines tu stage por defecto
+  role: arn:aws:iam::111097882274:role/LabRole  # tu rol preexistente
+
   memorySize: 1024
   timeout: 30
 
-  # Rol preexistente
-  iam:
-    role: arn:aws:iam::111097882274:role/LabRole
-
-  # Variables de entorno
   environment:
-    # (Opcional, si sigues usando DynamoDB en otros handlers)
-    TABLE_NAME: ${sls:stage}-t_comentarios
-    # Para Ingesta Push a S3
+    # ahora sí existe provider.stage
     BUCKET_NAME: ${self:service}-ingestion-${self:provider.stage}
+    TABLE_NAME:  ${self:provider.stage}-t_comentarios
 
 functions:
   crear:
@@ -28,13 +24,11 @@ functions:
 
 resources:
   Resources:
-    # 1) Bucket S3 de ingesta (uno distinto por stage)
     IngestionBucket:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: ${self:service}-ingestion-${self:provider.stage}
 
-    # 2) Política inline para LabRole que permite hacer PutObject en ese bucket
     LabRoleS3PutPolicy:
       Type: AWS::IAM::Policy
       Properties:

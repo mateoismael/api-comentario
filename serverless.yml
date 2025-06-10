@@ -3,29 +3,18 @@ service: api-comentario
 
 provider:
   name: aws
+  # 1) Agrego región (puedes cambiar 'us-east-1' por la que uses)
+  region: ${opt:region, 'us-east-1'}
   runtime: python3.12
   memorySize: 1024
   timeout: 30
-  # Si quieres que Serverless gestione el rol e incluya permisos a DynamoDB y S3,
-  # reemplaza provider.iam.role por iamRoleStatements:
-  # iam.role: arn:aws:iam::111097882274:role/LabRole
+  iam:
+    # 3) Usas tu rol existente
+    role: arn:aws:iam::111097882274:role/LabRole
   environment:
     TABLE_NAME: ${sls:stage}-t_comentarios
+    # 2) Nueva variable para el bucket
     BUCKET_NAME: ingest-${sls:stage}
-
-  iamRoleStatements:
-    # Permite put en tu tabla DynamoDB
-    - Effect: Allow
-      Action:
-        - dynamodb:PutItem
-      Resource:
-        - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.TABLE_NAME}
-    # Permite subir objetos al bucket S3 creado abajo
-    - Effect: Allow
-      Action:
-        - s3:PutObject
-      Resource:
-        - arn:aws:s3:::${self:provider.environment.BUCKET_NAME}/*
 
 functions:
   crear:
@@ -55,8 +44,8 @@ resources:
             KeyType: RANGE
         BillingMode: PAY_PER_REQUEST
 
+    # 3) Recurso para crear el bucket de ingesta por stage
     BucketIngesta:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: ${self:provider.environment.BUCKET_NAME}
-        # Opcional: versionado, lifecycle, políticas, etc.

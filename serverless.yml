@@ -14,7 +14,7 @@ provider:
   environment:
     TABLE_NAME: ${sls:stage}-t_comentarios
     # 2) Nueva variable para el bucket
-    BUCKET_NAME: ingest-${sls:stage}
+    BUCKET_NAME: s11ingest-${sls:stage}
 
 functions:
   crear:
